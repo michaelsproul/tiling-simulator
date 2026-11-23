@@ -40,6 +40,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -174,10 +178,194 @@ legend {
   accent-color: var(--accent);
 }
 
+.toggle-tight {
+  margin: -4px 0 10px;
+  font-size: 0.9rem;
+}
+
 .hint {
   margin: 4px 0 8px;
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+.zone-panel h3 {
+  margin: 10px 0 6px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.zone-panel legend {
+  color: var(--accent);
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-danger {
+  color: var(--err);
+  border-color: var(--err);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--err) 12%, transparent);
+}
+
+.btn-small {
+  padding: 3px 8px;
+  font-size: 0.8rem;
+}
+
+#remove-zone {
+  margin: 2px 0 4px;
+}
+
+.apply {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 8px;
+}
+
+/* ---------- Zone list ---------- */
+
+.zone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.zone-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.zone-item:hover {
+  border-color: var(--accent);
+}
+
+.zone-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.zone-item[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.zone-badge {
+  display: grid;
+  place-items: center;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  padding: 0 4px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  background: var(--hearth);
+  border-radius: 999px;
+}
+
+.zone-item[aria-pressed="true"] .zone-badge {
+  color: var(--panel);
+  background: var(--accent);
+}
+
+.zone-list.single .zone-badge {
+  display: none;
+}
+
+.zone-name,
+.zone-meta {
+  display: block;
+}
+
+.zone-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.zone-meta {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.zone-mark {
+  font-weight: 700;
+  color: var(--ok);
+}
+
+.bad .zone-mark {
+  color: var(--err);
+}
+
+.choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 12px 0 4px;
+  font-size: 0.9rem;
+}
+
+.choice > span {
+  width: 100%;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.choice label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.choice input {
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 /* ---------- Preview ---------- */
@@ -212,6 +400,7 @@ body.invalid .status strong {
 .status p {
   margin: 2px 0 0;
   font-variant-numeric: tabular-nums;
+  white-space: pre-line;
 }
 
 .status ul {
@@ -253,7 +442,7 @@ body.invalid .status strong {
   vector-effect: non-scaling-stroke;
 }
 
-#ghosts {
+#ghosts path {
   fill: var(--ghost);
   fill-opacity: 0.08;
   stroke: var(--ghost);
@@ -262,9 +451,58 @@ body.invalid .status strong {
   vector-effect: non-scaling-stroke;
 }
 
+#zone-sel {
+  fill: var(--accent);
+  fill-opacity: 0.12;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+#zone-hits rect {
+  fill: transparent;
+  pointer-events: all;
+  cursor: pointer;
+}
+
+#zone-hits rect:hover {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+}
+
 #view text {
   fill: var(--muted);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+#zone-labels {
+  pointer-events: none;
+}
+
+#zone-labels rect {
+  fill: var(--panel);
+  fill-opacity: 0.92;
+  stroke: var(--tile-edge);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+#zone-labels text {
+  fill: var(--text);
+  font-weight: 650;
+}
+
+#zone-labels .selected rect {
+  fill: var(--accent);
+  fill-opacity: 1;
+  stroke: var(--accent);
+}
+
+#zone-labels .selected text {
+  fill: var(--panel);
 }
 
 .legend {
@@ -303,6 +541,11 @@ body.invalid .status strong {
 
 .swatch-ghost {
   border: 1.5px dashed var(--ghost);
+}
+
+.swatch-sel {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border: 2px solid var(--accent);
 }
 
 /* ---------- Wide screens: fill the window, preview beside controls ---------- */

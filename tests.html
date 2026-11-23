@@ -98,12 +98,12 @@
 
     r = axis(1300, 100, 5, false, true);
     check('balance flush: 12 tiles, 45 mm spread over 11 gaps, valid',
-      r.count === 12 && r.balanced && r.gapCount === 11 && near(r.gap, 5 + 45 / 11) && r.valid && r.start === 0, r);
+      r.count === 12 && r.balanced && r.gapUnits === 11 && near(r.gap, 5 + 45 / 11) && r.valid && r.start === 0, r);
     check('balance flush: last tile ends at the hearth edge', near(r.start + 11 * r.step + 100, 1300), r);
 
     r = axis(1255, 100, 5, true, true);
     check('balance border: 11 tiles, 95 mm spread over 12 gaps, valid',
-      r.count === 11 && r.gapCount === 12 && near(r.gap, 5 + 95 / 12) && r.valid && near(r.start, r.gap), r);
+      r.count === 11 && r.gapUnits === 12 && near(r.gap, 5 + 95 / 12) && r.valid && near(r.start, r.gap), r);
     check('balance border: last tile + gap ends at the hearth edge', near(r.start + 10 * r.step + 100 + r.gap, 1255), r);
 
     r = axis(1255, 100, 5, false, true);
@@ -116,7 +116,7 @@
     check('balance with fractional min gap', r.count === 12 && near(r.gap, 2.5 + 72.75 / 11) && r.valid, r);
 
     r = axis(150, 100, 5, false, true);
-    check('balance impossible: single flush tile has no gaps -> invalid', r.count === 1 && r.gapCount === 0 && !r.valid && near(r.leftover, 50), r);
+    check('balance impossible: single flush tile has no gaps -> invalid', r.count === 1 && r.gapUnits === 0 && !r.valid && near(r.leftover, 50), r);
     r = axis(150, 100, 5, true, true);
     check('balance single tile with border: both border gaps absorb it', r.count === 1 && near(r.gap, 25) && r.valid, r);
     r = axis(80, 100, 5, false, true);
@@ -125,6 +125,148 @@
     l = TilingLayout.computeLayout({ ...defaults, hearthW: 1300, hearthD: 430, balance: true });
     check('layout balance: both axes balanced independently and valid',
       l.valid && l.cols === 12 && l.rows === 4 && near(l.x.gap, 5 + 45 / 11) && near(l.y.gap, 5 + 15 / 3), l);
+
+    // ---------- Half-gap ends (zone edges inside the hearth) ----------
+
+    r = axis(312.5, 100, 5, [0, 0.5]);
+    check('flush start, half-gap end: 3 × 100 + 2.5 × 5 = 312.5 is valid', r.count === 3 && r.valid && r.start === 0 && r.gapUnits === 2.5, r);
+    r = axis(630, 100, 5, [0.5, 0.5]);
+    check('half-gap both ends: 6 × (100 + 5) = 630 is valid, first tile at 2.5', r.count === 6 && r.valid && r.start === 2.5, r);
+    r = axis(317.5, 100, 5, [1, 0.5]);
+    check('border start, half-gap end: 3 × 100 + 3.5 × 5 = 317.5 is valid', r.count === 3 && r.valid && r.start === 5, r);
+    r = axis(102.5, 100, 5, [0, 0.5]);
+    check('single tile plus half joint: 102.5 is valid', r.count === 1 && r.valid, r);
+    r = axis(100, 100, 5, [0, 0.5]);
+    check('single tile without room for its half joint: 0 tiles', r.count === 0 && !r.valid, r);
+    r = axis(150, 100, 5, [0, 0.5], true);
+    check('balance: a half joint absorbs the leftover of a single tile',
+      r.count === 1 && r.gapUnits === 0.5 && near(r.gap, 100) && r.valid, r);
+    r = axis(640, 100, 5, [0.5, 0.5], true);
+    check('balance with half-gap ends: 10 mm over 6 gap units',
+      r.count === 6 && near(r.gap, 5 + 10 / 6) && near(r.start, r.gap / 2) && r.valid, r);
+
+    // ---------- Zone geometry ----------
+
+    const rectNear = (a, b) => near(a.x, b.x) && near(a.y, b.y) && near(a.w, b.w) && near(a.d, b.d);
+    const rectsNear = (as, bs) => as.length === bs.length && as.every((a, i) => rectNear(a, bs[i]));
+    const area = (rs) => rs.reduce((s, q) => s + q.w * q.d, 0);
+    // Pieces must not overlap each other or the holes, and must cover the rest of the hearth.
+    function checkPartition(name, W, D, holes, pieces, holeArea) {
+      let overlaps = 0;
+      pieces.forEach((a, i) => {
+        pieces.slice(i + 1).forEach((b) => { if (TilingLayout.overlapArea(a, b) > 1e-9) overlaps++; });
+        holes.forEach((h) => { if (TilingLayout.overlapArea(a, h) > 1e-9) overlaps++; });
+      });
+      check(`${name}: pieces do not overlap`, overlaps === 0, pieces);
+      check(`${name}: pieces cover the rest of the hearth`, near(area(pieces) + holeArea, W * D), area(pieces));
+    }
+
+    let rect = TilingLayout.placeZone({ zoneW: 630, zoneD: 210, zoneX: 0, zoneY: 0, centreX: true, centreY: true }, 1255, 415);
+    check('placeZone centres on both axes', rectNear(rect, { x: 312.5, y: 102.5, w: 630, d: 210 }), rect);
+    rect = TilingLayout.placeZone({ zoneW: 630, zoneD: 210, zoneX: 10, zoneY: 20, centreX: false, centreY: true }, 1255, 415);
+    check('placeZone uses offsets on axes that are not centred', rectNear(rect, { x: 10, y: 102.5, w: 630, d: 210 }), rect);
+
+    const cut = TilingLayout.cutSurround;
+    const hole = { x: 312.5, y: 102.5, w: 630, d: 210 };
+    let pieces = cut(1255, 415, []);
+    check('cut with no zones: one piece covering the hearth', rectsNear(pieces, [{ x: 0, y: 0, w: 1255, d: 415 }]), pieces);
+
+    pieces = cut(1255, 415, [hole], 'rows');
+    check('cut rows: bands above and below, pieces either side', rectsNear(pieces, [
+      { x: 0, y: 0, w: 1255, d: 102.5 },
+      { x: 0, y: 102.5, w: 312.5, d: 210 },
+      { x: 942.5, y: 102.5, w: 312.5, d: 210 },
+      { x: 0, y: 312.5, w: 1255, d: 102.5 },
+    ]), pieces);
+
+    pieces = cut(1255, 415, [hole], 'cols');
+    check('cut cols: full-depth sides, pieces above and below', rectsNear(pieces, [
+      { x: 0, y: 0, w: 312.5, d: 415 },
+      { x: 312.5, y: 0, w: 630, d: 102.5 },
+      { x: 942.5, y: 0, w: 312.5, d: 415 },
+      { x: 312.5, y: 312.5, w: 630, d: 102.5 },
+    ]), pieces);
+
+    pieces = cut(1255, 415, [{ x: 0, y: 0, w: 1255, d: 415 }]);
+    check('cut: a zone covering the hearth leaves nothing', pieces.length === 0, pieces);
+
+    pieces = cut(1255, 415, [{ x: 0, y: 0, w: 500, d: 200 }]);
+    check('cut: zone in the corner leaves a piece beside it and a band below', rectsNear(pieces, [
+      { x: 500, y: 0, w: 755, d: 200 },
+      { x: 0, y: 200, w: 1255, d: 215 },
+    ]), pieces);
+
+    pieces = cut(1255, 415, [{ x: 0, y: 100, w: 1255, d: 200 }]);
+    check('cut: full-width zone leaves just bands above and below', rectsNear(pieces, [
+      { x: 0, y: 0, w: 1255, d: 100 },
+      { x: 0, y: 300, w: 1255, d: 115 },
+    ]), pieces);
+
+    let holes = [{ x: 100, y: 100, w: 200, d: 200 }, { x: 500, y: 150, w: 200, d: 100 }];
+    pieces = cut(1255, 415, holes, 'rows');
+    check('cut rows, two zones: 7 pieces', pieces.length === 7, pieces);
+    checkPartition('cut rows, two zones', 1255, 415, holes, pieces, 60000);
+    pieces = cut(1255, 415, holes, 'cols');
+    checkPartition('cut cols, two zones', 1255, 415, holes, pieces, 60000);
+
+    holes = [{ x: 100, y: 100, w: 300, d: 200 }, { x: 300, y: 50, w: 200, d: 100 }];
+    pieces = cut(1255, 415, holes);
+    checkPartition('cut, overlapping zones', 1255, 415, holes, pieces, 60000 + 20000 - 100 * 50);
+
+    holes = [{ x: 1100, y: -50, w: 300, d: 200 }];
+    pieces = cut(1255, 415, holes);
+    checkPartition('cut, zone past the hearth edge is clipped', 1255, 415, holes, pieces, 155 * 150);
+
+    pieces = cut(1255, 415, [{ ...hole, x: 1e-9 }]);
+    check('cut: edges within float error of the hearth edge leave no sliver', pieces.length === 3, pieces);
+
+    let e = TilingLayout.zoneEdges({ x: 0, y: 102.5, w: 312.5, d: 210 }, 1255, 415);
+    check('zoneEdges: left piece touches only the left edge', e.left && !e.right && !e.top && !e.bottom, e);
+
+    // Adding a zone of n·(tile + gap), centred, keeps an exact fit exact for every zone.
+    const settings = { tileW: 100, tileD: 100, gapX: 5, gapY: 5 };
+    for (const [border, W, D] of [[false, 1255, 415], [true, 1265, 425]]) {
+      const zone = { zoneW: 630, zoneD: 210, centreX: true, centreY: true };
+      const zr = TilingLayout.placeZone(zone, W, D);
+      const all = [zr, ...cut(W, D, [zr])].map((q) => TilingLayout.layoutZone(q, settings, W, D, border, false));
+      check(`centred zone in an exact fit (border ${border}): all 5 zones fit exactly`,
+        all.length === 5 && all.every((l) => l.valid), all.map((l) => [l.cols, l.rows, l.x.leftover, l.y.leftover]));
+      check(`centred zone (border ${border}): tile counts add up to the whole hearth`,
+        all.reduce((n, l) => n + l.total, 0) === 48, all.map((l) => l.total));
+    }
+
+    let lz = TilingLayout.layoutZone({ x: 312.5, y: 102.5, w: 630, d: 210 }, settings, 1255, 415, false, false);
+    check('layoutZone: inner zone has half-gap ends on both axes',
+      lz.x.ends[0] === 0.5 && lz.x.ends[1] === 0.5 && lz.y.ends[0] === 0.5 && lz.y.ends[1] === 0.5 && near(lz.x.start, 2.5), lz);
+    lz = TilingLayout.layoutZone({ x: 0, y: 0, w: 1255, d: 102.5 }, settings, 1255, 415, true, false);
+    check('layoutZone: top band gets border gaps at the hearth edges, half gap below',
+      lz.x.ends[0] === 1 && lz.x.ends[1] === 1 && lz.y.ends[0] === 1 && lz.y.ends[1] === 0.5, lz);
+
+    const suggest = TilingLayout.suggestZoneLength;
+    check('suggestZoneLength: 12 tiles -> 6 × 105', suggest(1255, 12, 100, 5) === 630, suggest(1255, 12, 100, 5));
+    check('suggestZoneLength: 4 tiles -> 2 × 105', suggest(415, 4, 100, 5) === 210, suggest(415, 4, 100, 5));
+    check('suggestZoneLength: 5 tiles -> 3 × 105', suggest(520, 5, 100, 5) === 315, suggest(520, 5, 100, 5));
+    check('suggestZoneLength: 3 tiles -> 1 × 105', suggest(310, 3, 100, 5) === 105, suggest(310, 3, 100, 5));
+    check('suggestZoneLength: 2 tiles -> full length', suggest(205, 2, 100, 5) === 205, suggest(205, 2, 100, 5));
+    check('suggestZoneLength: no tiles -> full length', suggest(80, 0, 100, 5) === 80, suggest(80, 0, 100, 5));
+
+    // ---------- Matching zones across cuts ----------
+
+    const match = TilingLayout.matchRects;
+    const whole = [{ x: 0, y: 0, w: 1255, d: 415 }];
+    const four = cut(1255, 415, [hole]);
+    let m = match(whole, four);
+    check('match: first, largest piece continues the old whole zone; all copy from it',
+      m[0].keep === 0 && m.slice(1).every((q) => q.keep === -1) && m.every((q) => q.from === 0), m);
+    m = match(four, four);
+    check('match: unchanged pieces keep their identity', m.every((q, i) => q.keep === i && q.from === i), m);
+    const moved = cut(1255, 415, [{ ...hole, x: 300 }]);
+    m = match(four, moved);
+    check('match: moving the zone keeps every piece', m.every((q, i) => q.keep === i), m);
+    m = match(four, whole);
+    check('match: removing the zone continues the largest piece', m[0].keep === 0 && m[0].from === 0, m);
+    m = match([], whole);
+    check('match: no old pieces -> nothing to keep or copy', m[0].keep === -1 && m[0].from === -1, m);
 
     // ---------- Input parsing ----------
 

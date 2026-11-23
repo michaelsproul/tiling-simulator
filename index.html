@@ -14,20 +14,58 @@
 
   <main>
     <aside class="controls">
-      <fieldset data-group="hearth">
+      <fieldset>
         <legend>Hearth</legend>
-        <div class="rows"></div>
+        <div class="rows" data-rows="hearth"></div>
       </fieldset>
 
-      <fieldset data-group="tile">
-        <legend>Tile</legend>
-        <div class="rows"></div>
+      <fieldset>
+        <legend>Zones</legend>
+        <ul id="zone-list" class="zone-list" aria-label="Zones"></ul>
+        <button type="button" id="add-zone" class="btn">Add zone</button>
+        <div class="choice" role="radiogroup" aria-labelledby="cut-label">
+          <span id="cut-label">Cut the area around added zones into</span>
+          <label><input type="radio" name="cut" value="rows" checked> Full-width bands</label>
+          <label><input type="radio" name="cut" value="cols"> Full-depth sides</label>
+        </div>
+        <p class="hint">
+          Each zone is a rectangle with its own tile and grout. Adding a zone cuts the area around
+          it into surround zones. Edges between zones run along the middle of a grout joint.
+          Click a zone in the preview to edit it.
+        </p>
       </fieldset>
 
-      <fieldset data-group="grout">
+      <fieldset class="zone-panel">
+        <legend id="zone-title"></legend>
+        <p id="zone-extent" class="hint"></p>
+        <div id="placement">
+          <h3>Size and position</h3>
+          <div class="rows" data-rows="size"></div>
+          <div class="rows" data-rows="offset-x"></div>
+          <label class="toggle toggle-tight">
+            <input type="checkbox" id="centre-x">
+            Centre left-right on the hearth
+          </label>
+          <div class="rows" data-rows="offset-y"></div>
+          <label class="toggle toggle-tight">
+            <input type="checkbox" id="centre-y">
+            Centre top-bottom on the hearth
+          </label>
+          <button type="button" id="remove-zone" class="btn btn-danger">Remove zone</button>
+        </div>
+        <h3>Tile</h3>
+        <div class="rows" data-rows="tile"></div>
+        <h3>Grout gaps</h3>
+        <div class="rows" data-rows="grout"></div>
+        <p class="hint">Values accept decimals or fractions, e.g. 1.5 or 1 1/2.</p>
+        <div id="apply" class="apply">
+          <button type="button" id="apply-tile" class="btn btn-small">Use this tile in all zones</button>
+          <button type="button" id="apply-gaps" class="btn btn-small">Use these gaps in all zones</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
         <legend>Grout</legend>
-        <div class="rows"></div>
-        <p class="hint">Gaps accept decimals or fractions, e.g. 1.5 or 1 1/2.</p>
         <label class="toggle">
           <input type="checkbox" id="border">
           Grout border around hearth edge
@@ -41,7 +79,7 @@
           Auto-balance grout gaps
         </label>
         <p class="hint">
-          Spreads any leftover space evenly across the grout gaps so the tiles fill the hearth
+          Spreads any leftover space evenly across each zone's grout gaps so its tiles fill it
           exactly. The gaps set before turning this on act as minimums. Turning it off keeps the
           balanced gaps, ready to adjust by hand.
         </p>
@@ -58,9 +96,13 @@
       <div class="stage">
         <svg id="view" preserveAspectRatio="xMidYMid meet" role="img"
              aria-label="Top-down view of the tiled hearth">
+          <defs id="clips"></defs>
           <rect id="hearth"></rect>
           <path id="tiles"></path>
-          <path id="ghosts"></path>
+          <g id="ghosts"></g>
+          <rect id="zone-sel"></rect>
+          <g id="zone-labels"></g>
+          <g id="zone-hits"></g>
           <text id="label-w" text-anchor="middle"></text>
           <text id="label-d" text-anchor="middle"></text>
         </svg>
@@ -70,6 +112,7 @@
         <li><span class="swatch swatch-tile"></span>Tile</li>
         <li><span class="swatch swatch-grout"></span>Hearth / grout</li>
         <li><span class="swatch swatch-ghost"></span>Omitted tile (would need cutting)</li>
+        <li id="legend-sel"><span class="swatch swatch-sel"></span>Selected zone</li>
       </ul>
     </section>
   </main>
