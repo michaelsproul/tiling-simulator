@@ -61,6 +61,7 @@
     placed: [],
     // { id, rect, ...settings }, re-cut on every render; settings follow the area they cover.
     surround: [],
+    // null selects no zone (only possible with more than one zone).
     selectedId: null,
   };
   const controls = {}; // key -> { def, label, slider, num, errorTimer }
@@ -81,6 +82,7 @@
     addZone: $('add-zone'),
     zoneTitle: $('zone-title'),
     zoneExtent: $('zone-extent'),
+    zoneFields: $('zone-fields'),
     placement: $('placement'),
     centreX: $('centre-x'),
     centreY: $('centre-y'),
@@ -151,7 +153,7 @@
   const selectedZone = () => zones.find((z) => z.id === state.selectedId);
 
   // The object a parameter's value is stored on: the hearth state or the selected zone.
-  const owner = (def) => (def.scope === 'hearth' ? state : selectedZone().obj);
+  const owner = (def) => (def.scope === 'hearth' ? state : selectedZone()?.obj);
 
   // ---------- Controls ----------
 
@@ -201,9 +203,10 @@
 
       // On blur / Enter, an invalid entry reverts to the last good value.
       num.addEventListener('change', () => {
-        if (TL.parseLength(num.value, def.allowZero) === null) {
+        const obj = owner(def);
+        if (obj && TL.parseLength(num.value, def.allowZero) === null) {
           clearTimeout(ctl.errorTimer);
-          num.value = fmtInput(owner(def)[def.key]);
+          num.value = fmtInput(obj[def.key]);
           num.classList.remove('error');
         }
       });
@@ -233,7 +236,7 @@
           z.obj.gapY = z.layout.y.gap;
         }
         const sel = selectedZone();
-        for (const def of GAP_PARAMS) showValue(def.key, sel.obj[def.key]);
+        if (sel) for (const def of GAP_PARAMS) showValue(def.key, sel.obj[def.key]);
       }
       state.balance = els.balance.checked;
       applyModes();
@@ -273,13 +276,15 @@
       listItems.get(state.selectedId)?.button.focus();
     });
 
+    // Clicking a zone selects it; clicking the selected zone again, or the preview outside the
+    // hearth, selects none.
     els.zoneList.addEventListener('click', (e) => {
       const button = e.target.closest('button[data-id]');
-      if (button) selectZone(button.dataset.id);
+      if (button) toggleZone(button.dataset.id);
     });
-    els.zoneHits.addEventListener('click', (e) => {
-      const rect = e.target.closest('[data-id]');
-      if (rect) selectZone(rect.dataset.id);
+    els.view.addEventListener('click', (e) => {
+      const hit = e.target.closest('#zone-hits [data-id]');
+      toggleZone(hit ? hit.dataset.id : null);
     });
 
     els.applyTile.addEventListener('click', () => {
@@ -409,6 +414,13 @@
     render();
   }
 
+  // Select a zone, or none if it is already selected (or `id` is null). A lone zone stays selected.
+  function toggleZone(id) {
+    const next = id === state.selectedId ? null : id;
+    if (next === null && zones.length < 2) return;
+    selectZone(next);
+  }
+
   // Replace the surround zones with the new cut, carrying ids and settings over by overlap.
   function reconcileSurround(rects) {
     const old = state.surround;
@@ -438,7 +450,7 @@
       ? surround.find((z) => contains(z.rect, centre))
       : surround.reduce((best, z) => (!best || z.rect.w * z.rect.d > best.rect.w * best.rect.d ? z : best), null);
 
-    const settings = settingsOf((host ?? selectedZone()).obj);
+    const settings = settingsOf((host ?? selectedZone() ?? zones[0]).obj);
     const area = host ? host.rect : { x: 0, y: 0, w: W, d: D };
     const length = (axis, extent, tile) =>
       host
@@ -533,26 +545,34 @@
     }
     const multi = zones.length > 1;
 
+    // A selected zone that was cut away passes the selection to the zone now covering its centre.
+    // A lone zone is always selected.
     let sel = selectedZone();
-    if (!sel) {
+    if (!sel && (state.selectedId !== null || !multi)) {
       sel = (selectedPoint && zones.find((z) => contains(z.rect, selectedPoint))) || zones[0];
       state.selectedId = sel.id;
     }
-    selectedPoint = centreOf(sel.rect);
-    if (sel.id !== syncedId) syncZoneControls(sel);
-    if (state.balance) {
-      for (const def of GAP_PARAMS) showValue(def.key, sel.layout[def.axis].gap);
+    if (sel) {
+      selectedPoint = centreOf(sel.rect);
+      if (sel.id !== syncedId) syncZoneControls(sel);
+      if (state.balance) {
+        for (const def of GAP_PARAMS) showValue(def.key, sel.layout[def.axis].gap);
+      }
+      if (sel.kind === 'placed') syncPlacement(sel);
+    } else {
+      syncedId = null; // reload the controls on the next selection, even of the same zone
     }
-    if (sel.kind === 'placed') syncPlacement(sel);
 
-    els.zoneTitle.textContent = sel.name;
-    els.zoneExtent.textContent =
-      sel.kind === 'placed'
+    els.zoneTitle.textContent = sel ? sel.name : 'No zone selected';
+    els.zoneExtent.textContent = !sel
+      ? 'Click a zone in the preview or pick one from the list to change its tile and grout.'
+      : sel.kind === 'placed'
         ? ''
         : hasPlaced
           ? `${fmtMm(sel.rect.w)} × ${fmtMm(sel.rect.d)} mm, sized by the zones around it.`
           : 'Covers the whole hearth. Add a zone to tile part of it differently.';
-    els.zoneExtent.hidden = sel.kind === 'placed';
+    els.zoneExtent.hidden = sel?.kind === 'placed';
+    els.zoneFields.hidden = !sel;
     els.apply.hidden = !multi;
 
     // View: hearth plus a fixed margin, so tile/grout changes never rescale the drawing.
@@ -584,7 +604,7 @@
       const where = `${plural(total, 'tile')} in ${zones.length} zones`;
       els.summary.textContent = valid ? `Exact fit: ${where}` : `Not an exact fit: ${where} placed`;
     } else {
-      const { x, y } = sel.layout;
+      const { x, y } = zones[0].layout;
       const counts = `${plural(x.count, 'column')} × ${plural(y.count, 'row')} = ${plural(total, 'tile')}`;
       els.summary.textContent = valid ? `Exact fit: ${counts}` : `Not an exact fit: ${counts} placed`;
     }
@@ -600,7 +620,7 @@
       const list = [...bySize].map(([size, n]) => `${n} at ${size}`).join(', ');
       details.push(`Tiles needed: ${list || 'none'}.`);
     }
-    if (state.balance) {
+    if (state.balance && sel) {
       const gapText = (axis, units, min) =>
         axis.gapUnits > 0
           ? `${fmtMm(axis.gap)} mm between ${units} (min ${fmtMm(min)})`
@@ -687,9 +707,10 @@
   function drawZones(sel, multi, pad) {
     const rectAttrs = (r) => ({ x: r3(r.x), y: r3(r.y), width: r3(r.w), height: r3(r.d) });
 
-    els.zoneSel.style.display = multi ? '' : 'none';
-    els.legendSel.hidden = !multi;
-    if (multi) {
+    const showSel = Boolean(multi && sel);
+    els.zoneSel.style.display = showSel ? '' : 'none';
+    els.legendSel.hidden = !showSel;
+    if (showSel) {
       for (const [k, v] of Object.entries(rectAttrs(sel.rect))) els.zoneSel.setAttribute(k, v);
     }
 
@@ -705,7 +726,7 @@
         if (r.w > bw * 1.2 && r.d > bh * 1.2) {
           const c = centreOf(r);
           labels.push(
-            svgEl('g', z.id === sel.id ? { class: 'selected' } : {}, [
+            svgEl('g', z.id === sel?.id ? { class: 'selected' } : {}, [
               svgEl('rect', { x: r3(c.x - bw / 2), y: r3(c.y - bh / 2), width: r3(bw), height: r3(bh), rx: r3(bh / 2) }),
               svgEl('text', {
                 x: r3(c.x),
@@ -717,7 +738,8 @@
             ]),
           );
         }
-        hits.push(svgEl('rect', { ...rectAttrs(r), 'data-id': z.id }, [svgEl('title', {}, [z.name])]));
+        const title = z.id === sel?.id ? `${z.name} (click again to select none)` : z.name;
+        hits.push(svgEl('rect', { ...rectAttrs(r), 'data-id': z.id }, [svgEl('title', {}, [title])]));
       }
     }
     els.zoneLabels.replaceChildren(...labels);
@@ -757,7 +779,7 @@
       item.mark.textContent = ok ? '✓' : '✗';
       item.mark.setAttribute('aria-label', ok ? 'exact fit' : 'not an exact fit');
       item.li.classList.toggle('bad', !ok);
-      item.button.setAttribute('aria-pressed', String(z.id === sel.id));
+      item.button.setAttribute('aria-pressed', String(z.id === sel?.id));
       return item.li;
     });
     for (const id of listItems.keys()) {

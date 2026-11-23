@@ -31,36 +31,39 @@
         <p class="hint">
           Each zone is a rectangle with its own tile and grout. Adding a zone cuts the area around
           it into surround zones. Edges between zones run along the middle of a grout joint.
-          Click a zone in the preview to edit it.
+          Click a zone in the preview to edit it. Click it again, or outside the hearth, to
+          select none.
         </p>
       </fieldset>
 
       <fieldset class="zone-panel">
         <legend id="zone-title"></legend>
         <p id="zone-extent" class="hint"></p>
-        <div id="placement">
-          <h3>Size and position</h3>
-          <div class="rows" data-rows="size"></div>
-          <div class="rows" data-rows="offset-x"></div>
-          <label class="toggle toggle-tight">
-            <input type="checkbox" id="centre-x">
-            Centre left-right on the hearth
-          </label>
-          <div class="rows" data-rows="offset-y"></div>
-          <label class="toggle toggle-tight">
-            <input type="checkbox" id="centre-y">
-            Centre top-bottom on the hearth
-          </label>
-          <button type="button" id="remove-zone" class="btn btn-danger">Remove zone</button>
-        </div>
-        <h3>Tile</h3>
-        <div class="rows" data-rows="tile"></div>
-        <h3>Grout gaps</h3>
-        <div class="rows" data-rows="grout"></div>
-        <p class="hint">Values accept decimals or fractions, e.g. 1.5 or 1 1/2.</p>
-        <div id="apply" class="apply">
-          <button type="button" id="apply-tile" class="btn btn-small">Use this tile in all zones</button>
-          <button type="button" id="apply-gaps" class="btn btn-small">Use these gaps in all zones</button>
+        <div id="zone-fields">
+          <div id="placement">
+            <h3>Size and position</h3>
+            <div class="rows" data-rows="size"></div>
+            <div class="rows" data-rows="offset-x"></div>
+            <label class="toggle toggle-tight">
+              <input type="checkbox" id="centre-x">
+              Centre left-right on the hearth
+            </label>
+            <div class="rows" data-rows="offset-y"></div>
+            <label class="toggle toggle-tight">
+              <input type="checkbox" id="centre-y">
+              Centre top-bottom on the hearth
+            </label>
+            <button type="button" id="remove-zone" class="btn btn-danger">Remove zone</button>
+          </div>
+          <h3>Tile</h3>
+          <div class="rows" data-rows="tile"></div>
+          <h3>Grout gaps</h3>
+          <div class="rows" data-rows="grout"></div>
+          <p class="hint">Values accept decimals or fractions, e.g. 1.5 or 1 1/2.</p>
+          <div id="apply" class="apply">
+            <button type="button" id="apply-tile" class="btn btn-small">Use this tile in all zones</button>
+            <button type="button" id="apply-gaps" class="btn btn-small">Use these gaps in all zones</button>
+          </div>
         </div>
       </fieldset>
 
