@@ -126,7 +126,7 @@ legend {
   accent-color: var(--accent);
 }
 
-.param input[type="number"] {
+.param input[type="text"] {
   grid-area: number;
   width: 100%;
   padding: 4px 6px;
@@ -138,12 +138,17 @@ legend {
   border-radius: 6px;
 }
 
-.param input[type="number"]:focus {
+.param input[type="text"]:focus {
   outline: 2px solid var(--accent);
   outline-offset: 0;
 }
 
-.param input[type="number"].error {
+.param input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.param input[type="text"].error {
   border-color: var(--err);
   outline-color: var(--err);
 }
@@ -204,12 +209,18 @@ body.invalid .status strong {
   color: var(--err);
 }
 
+.status p {
+  margin: 2px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
 .status ul {
   margin: 4px 0 0;
   padding-left: 1.2rem;
 }
 
-.status ul:empty {
+.status ul:empty,
+.status p:empty {
   display: none;
 }
 

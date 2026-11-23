@@ -27,6 +27,7 @@
       <fieldset data-group="grout">
         <legend>Grout</legend>
         <div class="rows"></div>
+        <p class="hint">Gaps accept decimals or fractions, e.g. 1.5 or 1 1/2.</p>
         <label class="toggle">
           <input type="checkbox" id="border">
           Grout border around hearth edge
@@ -35,12 +36,22 @@
           On: a grout gap also runs between the outer tiles and the hearth edge.
           Off: the outer tiles sit flush against the edge.
         </p>
+        <label class="toggle">
+          <input type="checkbox" id="balance">
+          Auto-balance grout gaps
+        </label>
+        <p class="hint">
+          Spreads any leftover space evenly across the grout gaps so the tiles fill the hearth
+          exactly. The gaps set before turning this on act as minimums. Turning it off keeps the
+          balanced gaps, ready to adjust by hand.
+        </p>
       </fieldset>
     </aside>
 
     <section class="preview">
       <div id="status" class="status" role="status" aria-live="polite">
         <strong id="summary"></strong>
+        <p id="details"></p>
         <ul id="issues"></ul>
       </div>
 

@@ -7,25 +7,36 @@
   const GROUP_NAMES = { hearth: 'Hearth', tile: 'Tile', grout: 'Grout' };
 
   // Defaults give an exact 12 × 4 fit with flush edges, so the app starts in the valid state.
+  // `axis` marks the grout gaps: while auto-balance is on they are locked, display the balanced
+  // gap for that axis, and use `balancedLabel`.
   const PARAMS = [
     { key: 'hearthW', group: 'hearth', label: 'Width (↔)', min: 100, max: 3000, step: 1, value: 1255, allowZero: false },
     { key: 'hearthD', group: 'hearth', label: 'Depth (↕)', min: 100, max: 2000, step: 1, value: 415, allowZero: false },
     { key: 'tileW', group: 'tile', label: 'Width (↔)', min: 10, max: 1200, step: 1, value: 100, allowZero: false },
     { key: 'tileD', group: 'tile', label: 'Depth (↕)', min: 10, max: 1200, step: 1, value: 100, allowZero: false },
-    { key: 'gapX', group: 'grout', label: 'Gap between columns (↔)', min: 0, max: 20, step: 0.5, value: 5, allowZero: true },
-    { key: 'gapY', group: 'grout', label: 'Gap between rows (↕)', min: 0, max: 20, step: 0.5, value: 5, allowZero: true },
+    { key: 'gapX', group: 'grout', axis: 'x', label: 'Gap between columns (↔)', balancedLabel: 'Balanced gap between columns (↔)', min: 0, max: 20, step: 0.1, value: 5, allowZero: true },
+    { key: 'gapY', group: 'grout', axis: 'y', label: 'Gap between rows (↕)', balancedLabel: 'Balanced gap between rows (↕)', min: 0, max: 20, step: 0.1, value: 5, allowZero: true },
   ];
+  const GAP_PARAMS = PARAMS.filter((def) => def.axis);
 
   // Upper bound on rectangles drawn, so absurd inputs cannot freeze the page.
   const MAX_DRAWN = 40000;
 
-  const state = { border: false };
-  const controls = {}; // key -> { def, slider, num }
+  // Delay before flagging an unparsable entry, so half-typed values like "1 1/" don't flash red.
+  const ERROR_DELAY_MS = 700;
+
+  // While balancing, state.gapX/gapY hold the minimum gaps (the values when balancing was turned
+  // on); the controls show the balanced gaps from the latest layout instead.
+  const state = { border: false, balance: false };
+  const controls = {}; // key -> { def, label, slider, num, errorTimer }
+  let lastLayout = null;
 
   const $ = (id) => document.getElementById(id);
   const els = {
     border: $('border'),
+    balance: $('balance'),
     summary: $('summary'),
+    details: $('details'),
     issues: $('issues'),
     view: $('view'),
     hearth: $('hearth'),
@@ -46,63 +57,75 @@
   const fmtMm = (n) => String(round(n, 2)); // human-readable readouts
   const r3 = (n) => round(n, 3); // SVG coordinates
 
-  function parseValue(str, allowZero) {
-    if (str.trim() === '') return null;
-    const n = Number(str);
-    if (!Number.isFinite(n) || n < 0 || (n === 0 && !allowZero)) return null;
-    return n;
-  }
-
   const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  // Next value on the step grid in direction `dir` (±1), moving `mult` steps. Off-grid values
+  // (e.g. a balanced 9.0909) snap to the neighbouring grid point first: 9.1 up, 9.0 down.
+  function stepValue(v, step, dir, mult) {
+    const k = v / step;
+    const base = dir > 0 ? Math.floor(k + 1e-9) : Math.ceil(k - 1e-9);
+    return round((base + dir * mult) * step, 6);
+  }
 
   // ---------- Controls ----------
 
   function buildControls() {
     for (const def of PARAMS) {
       const id = `in-${def.key}`;
-      const name = `${GROUP_NAMES[def.group]} ${def.label}`;
 
       const row = document.createElement('div');
       row.className = 'param';
       row.innerHTML = `
-        <label for="${id}">${def.label}</label>
-        <input type="range" min="${def.min}" max="${def.max}" step="${def.step}"
-               aria-label="${name} slider">
-        <input type="number" id="${id}" min="0" step="any" inputmode="decimal">
+        <label for="${id}"></label>
+        <input type="range" min="${def.min}" max="${def.max}" step="${def.step}">
+        <input type="text" id="${id}" inputmode="decimal" autocomplete="off" spellcheck="false">
         <span class="unit">mm</span>`;
       document.querySelector(`[data-group="${def.group}"] .rows`).appendChild(row);
 
-      const slider = row.querySelector('input[type="range"]');
-      const num = row.querySelector('input[type="number"]');
-      controls[def.key] = { def, slider, num };
+      const ctl = {
+        def,
+        label: row.querySelector('label'),
+        slider: row.querySelector('input[type="range"]'),
+        num: row.querySelector('input[type="text"]'),
+        errorTimer: 0,
+      };
+      controls[def.key] = ctl;
+      setLabel(ctl, def.label);
+      const { slider, num } = ctl;
 
       state[def.key] = def.value;
       slider.value = def.value;
       num.value = fmtInput(def.value);
 
-      slider.addEventListener('input', () => setValue(def.key, Number(slider.value), 'slider'));
+      slider.addEventListener('input', () => setValue(def.key, round(Number(slider.value), 6), 'slider'));
 
       num.addEventListener('input', () => {
-        const v = parseValue(num.value, def.allowZero);
-        num.classList.toggle('error', v === null);
-        if (v !== null) setValue(def.key, v, 'number');
+        clearTimeout(ctl.errorTimer);
+        const v = TilingLayout.parseLength(num.value, def.allowZero);
+        if (v === null) {
+          ctl.errorTimer = setTimeout(() => num.classList.add('error'), ERROR_DELAY_MS);
+          return;
+        }
+        num.classList.remove('error');
+        setValue(def.key, v, 'number');
       });
 
       // On blur / Enter, an invalid entry reverts to the last good value.
       num.addEventListener('change', () => {
-        if (parseValue(num.value, def.allowZero) === null) {
+        if (TilingLayout.parseLength(num.value, def.allowZero) === null) {
+          clearTimeout(ctl.errorTimer);
           num.value = fmtInput(state[def.key]);
           num.classList.remove('error');
         }
       });
 
-      // Arrow keys step by the slider step (Shift = ×10) instead of the browser default of 1.
+      // Arrow keys step along the slider's step grid (Shift = ×10).
       num.addEventListener('keydown', (e) => {
         if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
         e.preventDefault();
-        const delta = (e.key === 'ArrowUp' ? 1 : -1) * def.step * (e.shiftKey ? 10 : 1);
+        const next = stepValue(state[def.key], def.step, e.key === 'ArrowUp' ? 1 : -1, e.shiftKey ? 10 : 1);
         const floor = def.allowZero ? 0 : def.step;
-        setValue(def.key, Math.max(floor, round(state[def.key] + delta, 6)), 'key');
+        setValue(def.key, Math.max(floor, next), 'key');
       });
     }
 
@@ -111,27 +134,66 @@
       state.border = els.border.checked;
       render();
     });
+
+    els.balance.checked = state.balance;
+    els.balance.addEventListener('change', () => {
+      if (!els.balance.checked && lastLayout) {
+        // Keep the balanced gaps (full precision), so manual tweaking starts from them.
+        for (const def of GAP_PARAMS) {
+          state[def.key] = lastLayout[def.axis].gap;
+          showValue(def.key, state[def.key]);
+        }
+      }
+      state.balance = els.balance.checked;
+      applyBalanceMode();
+      render();
+    });
+
+    applyBalanceMode();
+  }
+
+  function setLabel(ctl, text) {
+    ctl.label.textContent = text;
+    ctl.slider.setAttribute('aria-label', `${GROUP_NAMES[ctl.def.group]} ${text} slider`);
+  }
+
+  // Lock/unlock the gap controls and switch their labels for the current balance setting.
+  function applyBalanceMode() {
+    for (const def of GAP_PARAMS) {
+      const ctl = controls[def.key];
+      setLabel(ctl, state.balance ? def.balancedLabel : def.label);
+      ctl.slider.disabled = state.balance;
+      ctl.num.disabled = state.balance;
+    }
   }
 
   function setValue(key, v, source) {
-    const { def, slider, num } = controls[key];
     state[key] = v;
+    showValue(key, v, source);
+    render();
+  }
 
-    // Widen the slider range when a typed value falls outside it.
+  // Show `v` in a parameter's slider and text box (skipping whichever one `source` names, since
+  // it already holds the value). Does not change state.
+  function showValue(key, v, source) {
+    const ctl = controls[key];
+    const { def, slider, num } = ctl;
+
+    // Widen the slider range when the value falls outside it.
     if (v > Number(slider.max)) {
-      slider.max = Math.ceil(v / def.step) * def.step;
+      slider.max = round(Math.ceil(v / def.step) * def.step, 6);
     }
     if (v < Number(slider.min)) {
       const floor = def.allowZero ? 0 : def.step;
-      slider.min = Math.max(floor, Math.floor(v / def.step) * def.step);
+      slider.min = round(Math.max(floor, Math.floor(v / def.step) * def.step), 6);
     }
 
     if (source !== 'slider') slider.value = v;
     if (source !== 'number') {
+      clearTimeout(ctl.errorTimer);
       num.value = fmtInput(v);
       num.classList.remove('error');
     }
-    render();
   }
 
   // ---------- Rendering ----------
@@ -143,12 +205,20 @@
       return `${name}: no whole tile fits (one ${unit} needs ${fmtMm(need)} mm).`;
     }
     const left = round(axis.leftover, 2) > 0 ? `${fmtMm(axis.leftover)} mm` : '< 0.01 mm';
+    if (state.balance && axis.gapCount === 0) {
+      return `${name}: ${left} left over, and with a single flush ${unit} there are no grout gaps to spread it across.`;
+    }
     return `${name}: ${left} left over, not enough for another whole ${unit} plus grout, so it is omitted.`;
   }
 
   function render() {
     const layout = TilingLayout.computeLayout(state);
     const { x, y } = layout;
+    lastLayout = layout;
+
+    if (state.balance) {
+      for (const def of GAP_PARAMS) showValue(def.key, layout[def.axis].gap);
+    }
     const W = state.hearthW;
     const D = state.hearthD;
 
@@ -196,6 +266,14 @@
     // Status readout.
     const counts = `${plural(x.count, 'column')} × ${plural(y.count, 'row')} = ${plural(layout.total, 'tile')}`;
     els.summary.textContent = layout.valid ? `Exact fit: ${counts}` : `Not an exact fit: ${counts} placed`;
+
+    const gapText = (axis, units, min) =>
+      axis.gapCount > 0
+        ? `${fmtMm(axis.gap)} mm between ${units} (min ${fmtMm(min)})`
+        : `no gaps between ${units}`;
+    els.details.textContent = state.balance
+      ? `Grout after balancing: ${gapText(x, 'columns', state.gapX)}, ${gapText(y, 'rows', state.gapY)}.`
+      : '';
 
     const issues = [
       axisIssue('Width', 'column', x, state.tileW, state.gapX),
