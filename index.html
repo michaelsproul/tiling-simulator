@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hearth Tiling Simulator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Hearth Tiling Simulator</h1>
+    <p class="subtitle">Whole tiles only, never cut. All dimensions in millimetres.</p>
+  </header>
+
+  <main>
+    <aside class="controls">
+      <fieldset data-group="hearth">
+        <legend>Hearth</legend>
+        <div class="rows"></div>
+      </fieldset>
+
+      <fieldset data-group="tile">
+        <legend>Tile</legend>
+        <div class="rows"></div>
+      </fieldset>
+
+      <fieldset data-group="grout">
+        <legend>Grout</legend>
+        <div class="rows"></div>
+        <label class="toggle">
+          <input type="checkbox" id="border">
+          Grout border around hearth edge
+        </label>
+        <p class="hint">
+          On: a grout gap also runs between the outer tiles and the hearth edge.
+          Off: the outer tiles sit flush against the edge.
+        </p>
+      </fieldset>
+    </aside>
+
+    <section class="preview">
+      <div id="status" class="status" role="status" aria-live="polite">
+        <strong id="summary"></strong>
+        <ul id="issues"></ul>
+      </div>
+
+      <div class="stage">
+        <svg id="view" preserveAspectRatio="xMidYMid meet" role="img"
+             aria-label="Top-down view of the tiled hearth">
+          <rect id="hearth"></rect>
+          <path id="tiles"></path>
+          <path id="ghosts"></path>
+          <text id="label-w" text-anchor="middle"></text>
+          <text id="label-d" text-anchor="middle"></text>
+        </svg>
+      </div>
+
+      <ul class="legend">
+        <li><span class="swatch swatch-tile"></span>Tile</li>
+        <li><span class="swatch swatch-grout"></span>Hearth / grout</li>
+        <li><span class="swatch swatch-ghost"></span>Omitted tile (would need cutting)</li>
+      </ul>
+    </section>
+  </main>
+
+  <script src="layout.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
